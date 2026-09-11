@@ -1,0 +1,53 @@
+workflows:
+  surumala-android-release:
+    name: SURUMALA CLASSMENT 2017 Android Release
+    max_build_duration: 120
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      vars:
+        PACKAGE_NAME: 'com.surumala.classment2017'
+        APP_VERSION_NAME: '1.0.0'
+        APP_VERSION_CODE: '21'
+        SUPABASE_URL: $SUPABASE_URL
+        SUPABASE_ANON_KEY: $SUPABASE_ANON_KEY
+    scripts:
+      - name: Extract SURUMALA project
+        script: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile, shutil
+          with zipfile.ZipFile("surumala_project.zip") as z:
+              z.extractall("project_extract")
+          roots = list(Path("project_extract").iterdir())
+          root = roots[0] if len(roots) == 1 and roots[0].is_dir() else Path("project_extract")
+          for item in root.iterdir():
+              dest = Path(".") / item.name
+              if dest.exists():
+                  if dest.is_dir(): shutil.rmtree(dest)
+                  else: dest.unlink()
+              shutil.move(str(item), str(dest))
+          PY
+      - name: Generate Android platform
+        script: |
+          flutter create --platforms=android --project-name surumala_classment_2017 .
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/app/build.gradle')
+          if p.exists():
+              s=p.read_text()
+              s=s.replace('namespace "com.example.surumala_classment_2017"','namespace "com.surumala.classment2017"')
+              s=s.replace('applicationId "com.example.surumala_classment_2017"','applicationId "com.surumala.classment2017"')
+              p.write_text(s)
+          m=Path('android/app/src/main/AndroidManifest.xml')
+          if m.exists():
+              m.write_text(m.read_text().replace('android:label="surumala_classment_2017"','android:label="SURUMALA CLASSMENT 2017"'))
+          PY
+      - name: Get packages
+        script: flutter pub get
+      - name: Build Android App Bundle
+        script: |
+          flutter build appbundle --release --build-name="$APP_VERSION_NAME" --build-number="$APP_VERSION_CODE" --dart-define=SUPABASE_URL="${SUPABASE_URL:-}" --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
